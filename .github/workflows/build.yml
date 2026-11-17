@@ -1,67 +1,30 @@
+# Automatically build the project and run any configured tests for every push
+# and submitted pull request. This can help catch issues that only occur on
+# certain platforms or Java versions, and provides a first line of defence
+# against bad commits.
 
-name: Build Pojav Sodium
-
-on:
-  workflow_dispatch:
-  push:
-    paths:
-      - 'sodium-source.zip'
-      - '.github/workflows/build.yml'
-
-permissions:
-  contents: read
+name: build
+on: [pull_request, push]
 
 jobs:
   build:
-    name: Compile Sodium for Pojav
-    runs-on: ubuntu-latest
-
+    runs-on: ubuntu-24.04
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Install Java
-        uses: actions/setup-java@v4
+      - name: checkout repository
+        uses: actions/checkout@v6
+      - name: validate gradle wrapper
+        uses: gradle/actions/wrapper-validation@v6
+      - name: setup jdk
+        uses: actions/setup-java@v5
         with:
-          distribution: temurin
           java-version: '25'
-
-      - name: Extract Sodium source
-        run: |
-          mkdir -p upstream
-          unzip -q sodium-source.zip -d upstream
-
-      - name: Compile Sodium
-        shell: bash
-        run: |
-          set -e
-
-          GRADLEW=$(find upstream -type f \
-            -name gradlew -print -quit)
-
-          if [ -z "$GRADLEW" ]; then
-            echo "Gradle wrapper not found!"
-            exit 1
-          fi
-
-          PROJECT_DIR=$(dirname "$GRADLEW")
-
-          cd "$PROJECT_DIR"
-
-          chmod +x gradlew
-
-          ./gradlew build --no-daemon
-
-          mkdir -p "$GITHUB_WORKSPACE/output"
-
-          find build/mods -maxdepth 1 \
-            -type f -name '*.jar' \
-            ! -name '*-sources.jar' \
-            -exec cp {} "$GITHUB_WORKSPACE/output/" \;
-
-      - name: Upload compiled JAR
-        uses: actions/upload-artifact@v4
+          distribution: 'microsoft'
+      - name: make gradle wrapper executable
+        run: chmod +x ./gradlew
+      - name: build
+        run: ./gradlew build
+      - name: capture build artifacts
+        uses: actions/upload-artifact@v7
         with:
-          name: Pojav-Sodium-Baseline
-          path: output/*.jar
-          if-no-files-found: error
+          name: Artifacts
+          path: build/libs/
